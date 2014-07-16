@@ -1,0 +1,14 @@
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/cmake/gps/gpsConfig.cmake
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/include/gps/api.h
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/include/gps/gps_despread.h
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/libgnuradio-gps.dylib
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/site-packages/gps/_gps_swig.so
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/site-packages/gps/gps_swig.py
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/site-packages/gps/gps_swig.pyc
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/site-packages/gps/gps_swig.pyo
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/include/gps/gps/swig/gps_swig.i
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/include/gps/gps/swig/gps_swig_doc.i
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/site-packages/gps/__init__.py
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/site-packages/gps/__init__.pyc
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/lib/python2.7/site-packages/gps/__init__.pyo
+/opt/local/Library/Frameworks/Python.framework/Versions/2.7/share/gnuradio/grc/blocks/gps_gps_despread.xml

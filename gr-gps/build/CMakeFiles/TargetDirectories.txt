@@ -1,0 +1,9 @@
+/Users/samu/koodit/gr/gr-gps/build/swig/CMakeFiles/_gps_swig.dir
+/Users/samu/koodit/gr/gr-gps/build/swig/CMakeFiles/_gps_swig_swig_tag.dir
+/Users/samu/koodit/gr/gr-gps/build/lib/CMakeFiles/gnuradio-gps.dir
+/Users/samu/koodit/gr/gr-gps/build/swig/CMakeFiles/gps_swig_swig_doc.dir
+/Users/samu/koodit/gr/gr-gps/build/apps/CMakeFiles/pygen_apps_9a6dd.dir
+/Users/samu/koodit/gr/gr-gps/build/python/CMakeFiles/pygen_python_8b0dd.dir
+/Users/samu/koodit/gr/gr-gps/build/swig/CMakeFiles/pygen_swig_a72a6.dir
+/Users/samu/koodit/gr/gr-gps/build/lib/CMakeFiles/test-gps.dir
+/Users/samu/koodit/gr/gr-gps/build/CMakeFiles/uninstall.dir
