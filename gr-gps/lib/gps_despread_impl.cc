@@ -32,7 +32,7 @@ namespace gr {
     gps_despread::make(int osr_in)
     {
       return gnuradio::get_initial_sptr
-        (new gps_despread_impl(decim));
+        (new gps_despread_impl(osr_in));
     }
 
     /*
@@ -44,37 +44,38 @@ namespace gr {
               gr::io_signature::make(1, 1, sizeof(gr_complex)), osr_in*1023)
     {
     	// reset delay counter
-		this->code_sync_counter = 0;
-		this->delay_selection = 0;
+		code_sync_counter = 0;
+		delay_selection = 0;
 		
 		// default to PRN 1
-		this->g1_tap0=1;
-		this->g1_tap1=5;
-		this->code_selection=1;
+		g1_tap0=1;
+		g1_tap1=5;
+		code_selection=1;
 			
 		// reset the registers
 		int i = 0;
 		
 		for(i = 0; i < 10; ++i)
 		{
-			this->g0_state[i] = 1;
-			this->g1_state[i] = 1;
+			g0_state[i] = 1;
+			g1_state[i] = 1;
 			
 		}
 		
 		// default to no osr
-		this->osr_int = osr_in;
-		this->osr_counter = 1;
+		osr_int = osr_in;
+		osr_counter = 1;
 		
 		// reset first sample
 		//this->output_sample = 0;
-		this->codegen_out = 1;
-		this->codegen_out_d = 1;
-		this->codegen_out_dd = 1;
+		codegen_out = 1;
+		codegen_out_d = 1;
+		codegen_out_dd = 1;
 		
 		// reset search params
-		this->best_delay = 0;
-		this->best_power = 0;
+		
+		best_delay = 0;
+		best_power = 0;
     }
 
     /*
@@ -84,33 +85,46 @@ namespace gr {
     {
     }
 	
+	
+	void gps_despread_impl::start_search(int avg)
+	{
+		search_enabled = 1;
+		search_avg_counter = 1;
+		search_avg_selection = avg;
+		search_avg_accumulator = 0;
+		search_counter = 1;
+		
+		best_delay = 0;
+		best_power = 0;
+	}
+	
 	void gps_despread_impl::reset_lfsr()
 	{
 		int i = 0;
 		
 		for(i = 0; i < 10; ++i)
 		{
-			this->g0_state[i] = 1;
-			this->g1_state[i] = 1;
+			g0_state[i] = 1;
+			g1_state[i] = 1;
 			
 		}
 	}
 	
 	void gps_despread_impl::set_delay(int d)
 	{
-		this->delay_selection = d;
-		this->output_sample = 0;
+		delay_selection = d;
+		output_sample = 0;
 	}
 	
 	int gps_despread_impl::delay() const
 	{
 		
-		return this->delay_selection;
+		return delay_selection;
 	}
 	
 	int gps_despread_impl::osr() const
 	{
-		return this->osr_int;
+		return osr_int;
 		
 	}
 	
@@ -122,14 +136,14 @@ namespace gr {
 	
 	int gps_despread_impl::code() const 
 	{
-		return this->code_selection;
+		return code_selection;
 		
 	}
 
 	void gps_despread_impl::set_code(int c)
 	{
 		
-		this->code_selection = c;
+		code_selection = c;
 		// code generator and tap coefficients from 
 		// Matjaz Vidmar
 		// http://lea.hamradio.si/~s53mv/navsats/theory.html
@@ -137,33 +151,33 @@ namespace gr {
 		switch(c) 
 		{
 			case 1:
-			this->g1_tap0=1;
-			this->g1_tap1=5;
+			g1_tap0=1;
+			g1_tap1=5;
 			break;
 			
 			case 2:
-			this->g1_tap0=2;
-			this->g1_tap1=6;
+			g1_tap0=2;
+			g1_tap1=6;
 			break;
 			
 			case 3:
-			this->g1_tap0=3;
-			this->g1_tap1=7;
+			g1_tap0=3;
+			g1_tap1=7;
 			break;
 			
 			case 4:
-			this->g1_tap0=4;
-			this->g1_tap1=8;
+			g1_tap0=4;
+			g1_tap1=8;
 			break;
 			
 			case 5:
-			this->g1_tap0=0;
-			this->g1_tap1=8;
+			g1_tap0=0;
+			g1_tap1=8;
 			break;
 			
 			case 6:
-			this->g1_tap0=1;
-			this->g1_tap1=5;
+			g1_tap0=1;
+			g1_tap1=5;
 			break;
 			
 			case 7:
@@ -333,7 +347,7 @@ namespace gr {
 			this->codegen_out_d = this->codegen_out;
 		
 			g1_out = (g1_state[g1_tap0] ^ g1_state[g1_tap1]) & 1;
-			this->codegen_out = (gr_complex) (2.0 * (( (g1_out ^ g0_state[9]) & 1 ) - 0.5))
+			this->codegen_out = (gr_complex) (2.0 * (( (g1_out ^ g0_state[9]) & 1 ) - 0.5));
 		}
 	}	
 	

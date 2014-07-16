@@ -28,50 +28,67 @@ namespace gr {
 
     class gps_despread_impl : public gps_despread
     {
-     private:
+    private:
       // Nothing to declare in this block.
 		 
 		 
 		 // code generator
-		 int g0_state[10];
-		 int g1_state[10];	 
+		int g0_state[10];
+		int g1_state[10];	 
 		 
-		 int g1_tap0;
-		 int g1_tap1;
-		 int code_selection;
+		int g1_tap0;
+		int g1_tap1;
+		int code_selection;
 		 
-		 int osr_int;
-		 int osr_counter;
+		int osr_int;
+		int osr_counter;
 		 
-		 int code_sync_counter;
-		 int delay_selection;
+		int code_sync_counter;
+		int delay_selection;
 		 
-		 gr_complex codegen_out;
-		 gr_complex codegen_out_d;
-		 gr_complex codegen_out_dd;
+		gr_complex codegen_out;
+		gr_complex codegen_out_d;
+		gr_complex codegen_out_dd;
 		 
+		void reset_lfsr(void);
+
+
 		 
 		 // search
-		 int search_enabled;
-		 int search_avg_counter;
-		 int search_avg_selection;
-		 int search_avg_accumulator;
-		 int search_counter;
+		int search_enabled;
+		int search_avg_counter;
+		int search_avg_selection;
+		float search_avg_accumulator;
+		int search_counter;
 		 
-		 int best_delay;
-		 float best_power;
+		int best_delay;
+		float best_power;
 		 
-		 // sample accumulators
-		 gr_complex output_sample;
-		 gr_complex output_sample_early;
-		 gr_complex output_sample_late;
+		// sample accumulators
+		gr_complex output_sample;
+		gr_complex output_sample_early;
+		gr_complex output_sample_late;
 
-     public:
-      gps_despread_impl();
-      ~gps_despread_impl();
+	public:
+		gps_despread_impl(int);
+		~gps_despread_impl();
 
+		void advance_lfsr(int);
+		void set_code(int);
+		int code(void) const;
+	  
+		void set_osr(int);
+		int osr(void) const;
+	  
+		void set_delay(int);
+		int delay(void) const;
+	  
+		void start_search(int);
+	  
+
+	  
       // Where all the action really happens
-      int work(int noutput_items,
+		int work(int noutput_items,
 	       gr_vector_const_void_star &input_items,
 	       gr_vector_void_star &output_items);
     };
