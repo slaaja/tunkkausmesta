@@ -2,7 +2,7 @@
 #!/usr/bin/env python
 
 DEFAULT_RX_FREQ = 1575.42e6
-DEFAULT_OSR = 10
+DEFAULT_OSR = 2
 DEFAULT_SAMPLE_RATE = 1023e3 * DEFAULT_OSR
 SEARCH_DELAY=0.01
 
@@ -88,7 +88,7 @@ class top_block(stdgui2.std_top_block, pubsub):
         self.subscribe('dc_offset_imag', self.set_dc_offset)
      
         #self.subscribe(KEY_DELAY, self.set_delay)
-        #self.subscribe(KEY_CODE, self.set_code)
+        self.subscribe(KEY_CODE, self.set_code)
         
         self.src = osmosdr.source(options.args) 
         
@@ -110,13 +110,13 @@ class top_block(stdgui2.std_top_block, pubsub):
         
         
         self.src.set_sample_rate(options.sample_rate)
-        self.src.set_bandwidth(4e6)
+        self.src.set_bandwidth(1.5e6)
     
         self.dcb = filter.dc_blocker_cc(512,False)
         self.connect(self.src,self.dcb)
         
-        self.despread = gps.gps_despread()
-        self.despread.set_osr(DEFAULT_OSR)
+        self.despread = gps.gps_despread(DEFAULT_OSR)
+
         self.connect(self.dcb,self.despread)
             
         
@@ -131,10 +131,10 @@ class top_block(stdgui2.std_top_block, pubsub):
         #                                  fft_rate=30)
                                 #self.spectrum.set_callback(self.wxsink_callback)
         
-        #self.scope = scopesink2.scope_sink_c(panel,title='Constellation', sample_rate=1e3, size=(300,300),
-        #                                    xy_mode=True)
+        self.scope = scopesink2.scope_sink_c(panel,title='Constellation', sample_rate=1e3, size=(300,300),
+                                            xy_mode=True)
         #self.connect(self.decimator, self.spectrum)
-        #self.connect(self.despread, self.spectrum)
+        self.connect(self.despread, self.scope)
         
         self.powerdet = blocks.rms_cf(alpha=0.002)
         self.connect(self.despread, self.powerdet)
@@ -197,7 +197,7 @@ class top_block(stdgui2.std_top_block, pubsub):
         
     def _build_gui(self, vbox):
         #vbox.Add(self.spectrum.win, 1, wx.EXPAND)
-        #vbox.Add(self.scope.win,1,wx.EXPAND)
+        vbox.Add(self.scope.win,1,wx.EXPAND)
         vbox.AddSpacer(3)
         #vbox.Add(self.scope.win, 1, wx.EXPAND)
         #vbox.AddSpacer(3)
@@ -337,14 +337,17 @@ class top_block(stdgui2.std_top_block, pubsub):
         
         
         def search_callback(value):
-            if value:
-                self.search_running=True
-                thread.start_new_thread(self.satellite_search, (SEARCH_DELAY,1))
+        
+            if(self.despread.search_running()):
+                print "Search still running", self.despread.peak()
             else:
-                self.search_running=False
+                self.despread.start_search(20)
+                #self.search_running=True
+                #thread.start_new_thread(self.satellite_search, (0,0))
+                
         
         self.search_button=forms.toggle_button(
-            sizer=box1,parent=self.panel,false_label='Search',true_label='Stop',value=False,callback=search_callback
+            sizer=box1,parent=self.panel,false_label='Search',true_label='Search',value=False,callback=search_callback
         )
         
         vbox.Add(box1, 0, wx.EXPAND)
@@ -372,53 +375,24 @@ class top_block(stdgui2.std_top_block, pubsub):
         #self.delay_select_text.Disable()
         #self.code_select_text.Disable()
         
-        searchcode = self[KEY_CODE]
+        f_values = range(-4000,4000,100)
         
-        print "#### Searching for GPS satellite with PRN code", searchcode
-        
-        self.set_code(searchcode)
-        
-        d = 0
-
-        f_step = 1000
-        
-        codes = range(0, 1023-1)
-        freqs = range(-4000,4000,f_step)
-        powers = [[0 for item in range(0,len(codes))] for item in range(0,len(freqs))]
-        
-
-        for d in range(0,len(codes)):
-            for i in range(0,len(freqs)):
+        for f in f_values:
+            if self.search_running == False:
+                print "#### Search ended"
+                thread.exit()
                 
-                if self.search_running == False:
-                    print "#### Search ended"
-                    thread.exit()
-                
-                self.set_freq(DEFAULT_RX_FREQ + freqs[i])
-                self[KEY_FREQCORR] = freqs[i]
-          
-                self.set_delay(d*DEFAULT_OSR)
-                self[KEY_DELAY] = d
-                
- 
-                
-                time.sleep(searchdelay)
-
-                p = max(max(powers))
-                powers[i][d] = self.powerprobe.level()
-                self[KEY_POWER2] =(20*scipy.log10(self.powerprobe.level())) 
+            self.src.set_sample_rate(DEFAULT_SAMPLE_RATE + f)
+            print 'freq =',f
             
-                if max(max(powers)) > p :
-                        
-                    self[KEY_BDELAY] = (d)
-                    self[KEY_BFREQ] = freqs[i]
-                    self[KEY_POWER] = (20*scipy.log10(max(max(powers))))
-                        #print 'new best freq offset',freqs[i], 'Hz'
-                        
-        print '##### Search complete'
-        self.set_freq(DEFAULT_RX_FREQ + self[KEY_BFREQ])
-        self.set_delay(self[KEY_BDELAY]*DEFAULT_OSR)
-
+            self.despread.start_search(2)
+            
+            while self.despread.search_running():
+                time.sleep(1)
+            
+            
+   
+        self.search_running = 0
         thread.exit()
 
             
