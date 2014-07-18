@@ -23,41 +23,43 @@
 #define INCLUDED_GPS_GPS_DESPREAD_H
 
 #include <gps/api.h>
-#include <gnuradio/sync_decimator.h>
+#include <gnuradio/block.h>
 
 namespace gr {
   namespace gps {
 
-	/*!
-	* \brief <+description of block+>
-	* \ingroup gps
-	*
-	*/
-
-    class GPS_API gps_despread : virtual public gr::sync_decimator
+    /*!
+     * \brief <+description of block+>
+     * \ingroup gps
+     *
+     */
+    class GPS_API gps_despread : virtual public gr::block
     {
-		public:
-		typedef boost::shared_ptr<gps_despread> sptr;
+     public:
+      typedef boost::shared_ptr<gps_despread> sptr;
 
-		
-		virtual void set_delay(int) = 0;
-		virtual int delay() const = 0;
-		virtual int osr() const = 0;
-		virtual void set_osr(int) = 0;
-		virtual int code() const = 0;
-		virtual void set_code(int) = 0;	
-		virtual void advance_lfsr(int ) = 0; 
-		virtual void start_search(int) = 0;
 
-		/*!
-		* \brief Return a shared_ptr to a new instance of gps::gps_despread.
-		*
-		* To avoid accidental use of raw pointers, gps::gps_despread's
-		* constructor is in a private implementation
-		* class. gps::gps_despread::make is the public interface for
-		* creating new instances.
-		*/
-		static sptr make(int);
+	  virtual void set_delay(int) = 0;
+	  virtual int delay() const = 0;
+	  virtual int osr() const = 0;
+	  virtual void set_osr(int) = 0;
+	  virtual int code() const = 0;
+	  virtual void set_code(int) = 0;	
+
+	  
+	  virtual int search_running(void) const = 0;
+	  virtual void start_search(int) = 0;
+	  virtual float peak(void) const = 0;
+
+      /*!
+       * \brief Return a shared_ptr to a new instance of gps::gps_despread.
+       *
+       * To avoid accidental use of raw pointers, gps::gps_despread's
+       * constructor is in a private implementation
+       * class. gps::gps_despread::make is the public interface for
+       * creating new instances.
+       */
+      static sptr make(int);
     };
 
   } // namespace gps
