@@ -1,142 +1,168 @@
 #!/opt/local/bin/python2.7
 #!/usr/bin/env python
 
-from gnuradio import gr, gr_unittest
+from gnuradio import gr
 from gnuradio import blocks
+from gnuradio import digital
+from gnuradio import filter
+from gnuradio import analog
+from gnuradio import audio
 from gnuradio.eng_option import eng_option
 from optparse import OptionParser
 import gps
-import goldcode_gen
+
 import osmosdr 
 import numpy
 
-SNR = 0.5;
+import time
 
-DEFAULT_OSR = 2
+import thread
+
+RX_IF = 0
+DEFAULT_OSR = 16
 DEFAULT_SAMPLE_RATE = DEFAULT_OSR * 1023e3
-DEFAULT_RX_FREQ = 1575.42e6
+DEFAULT_RX_FREQ = 1575.42e6 - RX_IF
+
+CODE_SEL = 20
+AVG_SEL = 1
 
 class my_topblock(gr.top_block):
-    def invert_sequence(self, s):
-        c = []
+
+    def satellite_search(self,a,b):
+        time.sleep(5)
         
-        for i in range(0,len(s)):
-            c.append(-s[i])
-            
-        return c
+        self.despread.start_search(AVG_SEL)
         
-    def get_code_sequence(self, osr):
-        # PRN 12
-        g1_tap0 = 4
-        g1_tap1 = 5
+        return
         
-        g0 = [1,1,1,1,1,1,1,1,1,1]
-        g1 = [1,1,1,1,1,1,1,1,1,1]
+        print '### Starting search'
         
-        c = []
-        c1 = [0] * 1023
+        delayrange = range(0,1023)
+        best_snr = -100
+        best_d = 0
         
-        for i in range(0,1023):
-            g1_out = g1[g1_tap0] ^ g1[g1_tap1]
         
-            for k in range(0, osr):
-                c.append(2.0 * ( (g1_out ^ g0[9])  - 0.5) )
-                
-            c1[i] = g1_out ^ g0[9]
-            
-            g0_next = g0[2] ^ g0[9]
-            g1_next = g1[1] ^ g1[2] ^ g1[5] ^ g1[7] ^ g1[8] ^ g1[9]
-            
-            for j in range(9,-1,-1):
-                if j == 0:              
-                    g0[j] = g0_next
-                    g1[j] = g1_next
-                    
-                else:
-                    g0[j] = g0[j-1]
-                    g1[j] = g1[j-1]
-                    
-                
-        #print c1
-        return c
+        for d in delayrange:
+            self.despread.set_delay(d)
     
-    def produce_data(self, b, osr):
-        d = [];
-        
-        for i in range(0,len(b)):
-            if b[i] == 0:
-                d.extend(self.invert_sequence(self.get_code_sequence(osr)))
-            else:
-                d.extend(self.get_code_sequence(osr))
-        
-        
-        return d
-        
-    def __init__(self,kohinat):
+            time.sleep(0.1)
+            
+            snr = self.snrprobe.snr()
+            
+            print d,': SNR:',snr, 'error=',self.despread.error(),'[best =',best_snr,'at d =',best_d,']'
+            
+            if snr > best_snr:
+                best_snr = snr
+                best_d = d
+                print '# New best SNR:',best_snr,'with code delay',best_d
+                
+                
+        print '### Search ended. Best SNR =',best_snr,'at d =',best_d
+        print '### Setting code delay to d=',best_d
+        self.despread.set_delay(best_d)
+
+
+    def __init__(self, prn_code):
         gr.top_block.__init__(self)
-        
+ 
+        parser = OptionParser(option_class=eng_option)
+ 
+        parser.add_option('-a', '--args', type='string', default='bladerf=0',
+                          help='Device args, [default=%default]')
+ 
+        parser.add_option('-s', '--sample-rate', type='eng_float', default=DEFAULT_SAMPLE_RATE,
+                          help='Sample rate [default=%default]')
+ 
+        parser.add_option('-f', '--rx-freq', type='eng_float', default=DEFAULT_RX_FREQ,
+                          help='RX frequency [default=%default]')
+                          
+        parser.add_option("", "--ref-scale", type="eng_float", default=1.0,
+                         help="Set dBFS=0dB input value, default=[%default]")
+ 
+        parser.add_option("-v", "--verbose", action="store_true", default=False,
+                          help="Use verbose console output [default=%default]")
+ 
+        (options, args) = parser.parse_args()
+        if len(args) != 0:
+            parser.print_help()
+            sys.exit(1)
+        self.options = options
 
-        #self.src = goldcode_gen.goldcode_gen();
-        #self.src.set_code(12)
-        #self.src.set_osr(DEFAULT_OSR)
-        #self.src.advance_lfsr(10)
-        delay = 123 * DEFAULT_OSR
-        data = [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+        self.src = osmosdr.source(options.args)
         
+        try:
+            self.src.get_sample_rates().start()
+        except RuntimeError:
+            print "No sample rates. No source connected?"
+            sys.exit(1)
+            
         
-        self.src_data = self.produce_data(data * 200, DEFAULT_OSR)
-        
-        self.src_data = self.src_data[delay:]
-        
-        noise = numpy.random.randn(len(self.src_data))/SNR/SNR
-        
-        self.src_data = [x + y for x, y in zip(self.src_data, noise)]
-        #src_data = src_data + numpy.random.randn(len(src_data))*1/SNR/2
+            
+        self.src.set_gain(6, 'LNA');
+        self.src.set_gain(30, 'VGA1');
+        self.src.set_gain(30, 'VGA2');
 
-        self.src = blocks.vector_source_c(self.src_data);
+        for name in self.src.get_gain_names():
+            print name, 'gain =', self.src.get_gain(name)
+
+        
+        ## signal source
+        print "Sample rate:",self.src.set_sample_rate(options.sample_rate)
+        self.src.set_bandwidth(10e6)
+              
+        ## DC compensation
+        self.dcb = filter.dc_blocker_cc(512,False)
+        self.connect(self.src,self.dcb)
+        
+        
+        #bpf_taps = filter.firdes.complex_band_pass_2(1, 1023e3*16, 0.7e6, 3.3e6, 500e3, 60)
+        #self.lpf = filter.fft_filter_ccc(1, bpf_taps)
+        #self.connect(self.dcb, self.lpf)
+        
+        ## AGC
+        self.agc = analog.agc_cc()
+        self.connect(self.dcb, self.agc)
        
-        
-        self.despread=gps.gps_despread(DEFAULT_OSR)
-
-        self.despread.set_code(12)
        
+        ## DSSS despread
+        self.despread=gps.gps_despread(DEFAULT_OSR, 2*3.1415/100)
+        self.despread.set_code(prn_code)
+        self.connect(self.agc, self.despread)
+        print '## PRN code',prn_code,'selected'
 
-        #self.despread.start_search(10)
+        ## BPSK SNR measurement
+        self.snrprobe = digital.mpsk_snr_est_cc(digital.SNR_EST_SIMPLE, DEFAULT_OSR*1023*20, 0.1)
+        self.connect(self.despread,self.snrprobe)
         
-        self.connect(self.src, self.despread)
-
+        ## BPSK receiver
+        omega = 20
+        self.demod = digital.mpsk_receiver_cc(2, 0, 0.5/(1e3*DEFAULT_OSR*2), -10e3, 10e3, 0, 0.05, omega, omega*omega/4, 0.005)
+        self.connect(self.snrprobe, self.demod)
+        
+        #self.c2r = blocks.complex_to_real()
+        #self.connect(self.demod, self.c2r)
+        
+        #self.resampler = filter.fractional_interpolator_ff(0, 44100/50);
+        #self.connect(self.c2r, self.resampler)
+        
+        ## BPSK constellation decoder (f -> b)
+        constellation = digital.constellation_bpsk()
+        self.constdecoder = digital.constellation_decoder_cb(constellation.base())
+        self.connect(self.demod, self.constdecoder)
+        
+        ## file sink
+        #self.outputsink = blocks.file_sink(gr.sizeof_char, './output.raw', True)
+        self.outputsink = blocks.file_sink(1, './output.raw', False)
+        #self.outputsink = audio.sink(44100)
+        self.connect(self.constdecoder, self.outputsink)
 
         
-        self.srcsink = blocks.vector_sink_c()
-        self.connect(self.src, self.srcsink)
-        self.sink = blocks.vector_sink_c()
-        self.connect(self.despread, self.sink)
-        
-        self.despread.start_search(4)
-
 def main():
-    
-    #kohinat = numpy.random.randn(1023 * 2 * DEFAULT_OSR)*1/SNR/SNR
-
-    
-    paras = 0
-    paras_i = 0
-    
-
-    tb=my_topblock([])
-    
-    
+    tb = my_topblock(CODE_SEL)
+   
+    thread.start_new_thread(tb.satellite_search, (0,0))
     tb.run()
 
-        
-        
-    
-    #print tehot
-    print 'len(tb.sink.data()) =',len(tb.sink.data())
-    print 'len(tb.srcsink.data()) =',len(tb.srcsink.data())
-    
-    
-    
-
+   
 if __name__ == '__main__':
     main()

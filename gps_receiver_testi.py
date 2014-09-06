@@ -12,7 +12,7 @@ DC_COMP_Q = 0.42
 
 import osmosdr
 
-from gnuradio import gr, gru, eng_notation, analog, blocks, filter
+from gnuradio import gr, gru, eng_notation, analog, blocks, filter, digital
 from gnuradio.gr.pubsub import pubsub
 from gnuradio.eng_option import eng_option
 from optparse import OptionParser
@@ -95,7 +95,7 @@ class top_block(stdgui2.std_top_block, pubsub):
         try:
             self.src.get_sample_rates().start()
         except RuntimeError:
-            print "Source has no sample rates (wrong device arguments?)."
+            print "No sample rates. No source connected?"
             sys.exit(1)
         
         ## hommaa gainiarvot ja -nimet src:sta
@@ -110,43 +110,55 @@ class top_block(stdgui2.std_top_block, pubsub):
         
         
         self.src.set_sample_rate(options.sample_rate)
-        self.src.set_bandwidth(1.5e6)
+        self.src.set_bandwidth(2e6)
     
+        ## DC compensation
         self.dcb = filter.dc_blocker_cc(512,False)
         self.connect(self.src,self.dcb)
-        
-        self.despread = gps.gps_despread(DEFAULT_OSR)
+      
+        ## DSSS despread (1023MHz * osr -> 1kHz)
+        self.despread=gps.gps_despread(DEFAULT_OSR, 2*3.1415/100)
+        self.despread.set_code(21)
+        self.connect(self.dcb, self.despread)
 
-        self.connect(self.dcb,self.despread)
-            
-        
+        ## BPSK SNR measurement
+       
+        self.snrprobe = digital.mpsk_snr_est_cc(digital.SNR_EST_SIMPLE, DEFAULT_OSR*20, 0.1)
+        self.connect(self.despread,self.snrprobe)
+
+       
+        ## BPSK receiver
+        omega = 20
+        #self.demod = digital.mpsk_receiver_cc(2, 0, 0.5/(1e3*DEFAULT_OSR*2), -10e3, 10e3, 0, 0.05, omega, omega*omega/4, 0.005)
+        #self.connect(self.snrprobe, self.demod)
+       
+          
+       
         #self.filtertaps = filter.firdes.low_pass_2(1,options.sample_rate,4000,2000, 50)
         #self.decimator = filter.fft_filter_ccc(186, self.filtertaps)
         #self.connect(self.despread, self.decimator)
         
         
         
-        #self.spectrum = fftsink2.fft_sink_c(panel, fft_size=1024, sample_rate=1e3, ref_scale=options.ref_scale,
+        #self.spectrum = fftsink2.fft_sink_c(panel, fft_size=1024, sample_rate=options.sample_rate, ref_scale=options.ref_scale,
         #                                    ref_level=0, y_divs=10, average=False, avg_alpha=1e-1,
         #                                  fft_rate=30)
                                 #self.spectrum.set_callback(self.wxsink_callback)
         
         self.scope = scopesink2.scope_sink_c(panel,title='Constellation', sample_rate=1e3, size=(300,300),
                                             xy_mode=True)
-        #self.connect(self.decimator, self.spectrum)
-        self.connect(self.despread, self.scope)
+        self.connect(self.snrprobe, self.scope)
+        #self.connect(self.despread, self.scope)
         
-        self.powerdet = blocks.rms_cf(alpha=0.002)
-        self.connect(self.despread, self.powerdet)
-        
-        self.powerprobe = blocks.probe_signal_f()
-        self.connect(self.powerdet, self.powerprobe)
-       
+
+
+
+
         self.set_freq(options.rx_freq)
         
         self.search_running = False
         
-        self.frame.SetMinSize((800, 420))
+        self.frame.SetMinSize((500, 420))
         self._build_gui(vbox)
         
 
@@ -197,10 +209,10 @@ class top_block(stdgui2.std_top_block, pubsub):
         
     def _build_gui(self, vbox):
         #vbox.Add(self.spectrum.win, 1, wx.EXPAND)
-        vbox.Add(self.scope.win,1,wx.EXPAND)
-        vbox.AddSpacer(3)
-        #vbox.Add(self.scope.win, 1, wx.EXPAND)
+        #vbox.Add(self.scope.win,1,wx.EXPAND)
         #vbox.AddSpacer(3)
+        vbox.Add(self.scope.win, 1, wx.EXPAND)
+        vbox.AddSpacer(3)
         
         self.myform = myform = form.form()
         
@@ -375,22 +387,34 @@ class top_block(stdgui2.std_top_block, pubsub):
         #self.delay_select_text.Disable()
         #self.code_select_text.Disable()
         
-        f_values = range(-4000,4000,100)
         
-        for f in f_values:
+        
+        #f_values = range(-10000,10000,100)
+        f_values = [0]
+        best = -100
+        best_c = 0
+        codes = range(0,1024)
+        
+        for c in codes:
             if self.search_running == False:
                 print "#### Search ended"
                 thread.exit()
                 
-            self.src.set_sample_rate(DEFAULT_SAMPLE_RATE + f)
-            print 'freq =',f
+            self.despread.set_delay(c)
             
-            self.despread.start_search(2)
+            time.sleep(0.06)
             
-            while self.despread.search_running():
-                time.sleep(1)
+            snr = self.snrdet.snr()
             
             
+            if snr > best:
+                best = snr
+                best_c = c
+            
+            print c,': snr:',snr,'          best: ',best,'at code delay',best_c
+                
+                
+
    
         self.search_running = 0
         thread.exit()
