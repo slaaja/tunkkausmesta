@@ -19,4 +19,5 @@
 
 install(FILES
     gps_gps_despread.xml DESTINATION share/gnuradio/grc/blocks
+	gps_gps_codegen.xml DESTINATION share/gnuradio/grc/blocks
 )

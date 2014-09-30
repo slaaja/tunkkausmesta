@@ -304,10 +304,10 @@ namespace gr {
 
 			code_phase += code_phase_increment;
 
-			long limit = (1022L << 40);
+			long limit = (1023L << 40);
 
 			if( code_phase >=  limit)
-				code_phase -= (1022L << 40);
+				code_phase -= (1023L << 40);
 		}
 
         // Tell runtime system how many output items we produced.

@@ -9,8 +9,12 @@
 
 %{
 #include "gps/gps_despread.h"
+#include "gps/gps_codegen_c.h"
 %}
 
 
 %include "gps/gps_despread.h"
 GR_SWIG_BLOCK_MAGIC2(gps, gps_despread);
+%include "gps/gps_codegen_c.h"
+GR_SWIG_BLOCK_MAGIC2(gps, gps_codegen_c);
+

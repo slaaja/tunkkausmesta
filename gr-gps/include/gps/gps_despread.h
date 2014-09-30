@@ -23,7 +23,7 @@
 #define INCLUDED_GPS_GPS_DESPREAD_H
 
 #include <gps/api.h>
-#include <gnuradio/sync_decimator.h>
+#include <gnuradio/block.h>
 
 
 namespace gr {
@@ -34,7 +34,7 @@ namespace gr {
      * \ingroup gps
      *
      */
-    class GPS_API gps_despread : virtual public gr::sync_decimator
+    class GPS_API gps_despread : virtual public gr::block
     {
      public:
       typedef boost::shared_ptr<gps_despread> sptr;
@@ -47,10 +47,6 @@ namespace gr {
 	  virtual int code() const = 0;
 	  virtual void set_code(int) = 0;	
 
-	  
-	  virtual int search_running(void) const = 0;
-	  virtual void start_search(int) = 0;
-	  virtual float error(void) const = 0; // costas loop phase error
 
       /*!
        * \brief Return a shared_ptr to a new instance of gps::gps_despread.
@@ -60,7 +56,7 @@ namespace gr {
        * class. gps::gps_despread::make is the public interface for
        * creating new instances.
        */
-      static sptr make(int, float);
+      static sptr make(int, int);
     };
 
   } // namespace gps

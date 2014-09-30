@@ -30,6 +30,7 @@
 #include <gnuradio/unittests.h>
 #include "qa_gps.h"
 #include <iostream>
+#include <fstream>
 
 int
 main (int argc, char **argv)

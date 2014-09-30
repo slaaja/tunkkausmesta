@@ -27,6 +27,7 @@ link_directories(${Boost_LIBRARY_DIRS})
 
 list(APPEND gps_sources
     gps_despread_impl.cc
+	gps_codegen_c_impl.cc
 )
 
 set(gps_sources "${gps_sources}" PARENT_SCOPE)
