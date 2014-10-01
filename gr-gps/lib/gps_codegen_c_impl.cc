@@ -298,13 +298,13 @@ namespace gr {
 	gps_codegen_c_impl::advance_random_data()
     {
 		// 22-bit m-sequence LFSR
-		char new_bit = ~(random_data[21] ^ random_data[20]);
+		char new_bit = (random_data[21] ^ random_data[20]);
 
 		for(int i = 21; i >= 0; --i)
 		{
 			if(i == 0)
 			{
-				random_data[i] = new_bit;
+				random_data[i] = new_bit & 1;
 			}
 			else
 			{
@@ -313,7 +313,6 @@ namespace gr {
 
 		}
 
-		printf(":::: %d\n", (int)new_bit);
     }
 
     int

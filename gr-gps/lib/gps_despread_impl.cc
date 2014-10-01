@@ -331,33 +331,19 @@ namespace gr {
 
 		phase_error += freqerror_trunc;
 
-
-		printf("phase_error: %f\n", phase_error);
-		// PI loop filter
-
-		//float bw = 2 * M_PI / 1000;
-		//float damp = sqrt(2)/2;
-		//float Kp = 4 * damp * bw / (1 + 2 * damp * bw + bw * bw);
-		//float Ki = 4 * bw * bw / (1 + 2 * damp * bw + bw * bw);
-
-		//lf_int = lf_int + Ki * phase_error;
-		//nco_freq = (Kp * phase_error + lf_int) / (1023.0f / 2.0f);
-
-		// two pole loop filter
+		// two pole, one zero loop filter
 		float Kp = 0.905082;
 		float Kz = 0.990143;
 
 		lf_int = lf_int + (lf_pole_d - lf_zero_d + phase_error)/512.0f / 2000.0;
 		lf_pole_d =  Kp * (lf_pole_d - lf_zero_d + phase_error);		 
 		lf_zero_d = Kz * phase_error;
-		printf("z: %f, p: %f, i: %f\n", lf_zero_d, lf_pole_d, lf_int);
 
 		nco_freq = lf_int;
 
+
 		FILE *fid = fopen("/home/samu/testi_out.txt", "a+");
-		fprintf(fid, "%f,%f, %f, %f,\n", (nco_freq + nco_freq_fixed) * 1023e3 * osr_int / 2 / M_PI, phase_error, freqerror, freqerror_trunc);
-
-
+		fprintf(fid, "%f,\n", (nco_freq + nco_freq_fixed) * 1023e3 * osr_int / 2 / M_PI);
 		fclose(fid);
 
 		printf("nco_freq: %f\n", (nco_freq + nco_freq_fixed) * 1023e3 * osr_int / 2 / M_PI);
@@ -408,7 +394,6 @@ namespace gr {
 			{	
 				float freq_error = (arg(freq_corr_integrator_q) - arg(freq_corr_integrator_i_d) );
 				
-				printf("freq_error (q): %f\n", freq_error);
 				update_pll(freq_error);
 
 				freq_corr_integrator_q_d = freq_corr_integrator_q;
@@ -425,7 +410,6 @@ namespace gr {
 
 				// freq tracking
 				float freq_error = (arg(freq_corr_integrator_i) - arg(freq_corr_integrator_q_d) );
-				printf("freq_error (i): %f\n", freq_error);
 				update_pll(freq_error);
 				
 
@@ -475,7 +459,6 @@ namespace gr {
 			consumed++;
 		}
 
-		printf("track:: consumed: %d\n", consumed);
 		consume_each(consumed);
 	}
 
@@ -505,8 +488,6 @@ namespace gr {
 				break;			
 		}
 		
-        // Tell runtime system how many output items we produced.
-		printf("work:: noutput_items: %d noutputs: %d\n", noutput_items, noutputs);
         return noutputs;
     }
 
