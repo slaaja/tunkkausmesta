@@ -29,22 +29,29 @@ namespace gr {
     class gps_codegen_c_impl : public gps_codegen_c
     {
      private:
-      // Nothing to declare in this block.
+
 		gr_complex code_LUT[1023];
 		long code_phase;
 		long code_phase_increment;
 
 		int code_selection;
+		int datagen_mode;
+		
+		char random_data[22];
+		int data_counter;
+		void advance_random_data();
 
      public:
-      gps_codegen_c_impl(float, int);
-      ~gps_codegen_c_impl();
+		gps_codegen_c_impl(float, int, int);
+		~gps_codegen_c_impl();
 
-	  void set_code(int);
-	  void set_sample_rate(float);
+		void set_code(int);
+		void set_sample_rate(float);
+
+		void set_datamode(int);
 
       // Where all the action really happens
-      int work(int noutput_items,
+		int work(int noutput_items,
 	       gr_vector_const_void_star &input_items,
 	       gr_vector_void_star &output_items);
     };

@@ -48,8 +48,9 @@ namespace gr {
        */
 
 	  virtual void set_code(int) = 0;
+	  virtual void set_datamode(int) = 0;
 
-      static sptr make(float, int);
+      static sptr make(float, int, int);
     };
 
   } // namespace gps

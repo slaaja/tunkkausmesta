@@ -322,15 +322,15 @@ namespace gr {
 	void
 	gps_despread_impl::update_pll(float freqerror)
 	{
-		float freqerror_trunc = freqerror; // try to ignore half cycle phase shifts (navigation data)
+		float freqerror_trunc = freqerror; 
 
-		while(freqerror_trunc > M_PI)
-			freqerror_trunc -= 2*M_PI;
-		while(freqerror_trunc < -M_PI)
-			freqerror_trunc += 2*M_PI;
-
+		while(freqerror_trunc > M_PI/2)
+			freqerror_trunc -= M_PI;
+		while(freqerror_trunc < -M_PI/2)
+			freqerror_trunc += M_PI;
 
 		phase_error += freqerror_trunc;
+
 
 		printf("phase_error: %f\n", phase_error);
 		// PI loop filter
@@ -355,8 +355,8 @@ namespace gr {
 		nco_freq = lf_int;
 
 		FILE *fid = fopen("/home/samu/testi_out.txt", "a+");
-		fprintf(fid, "%f,%f,\n", (nco_freq + nco_freq_fixed) * 1023e3 * osr_int / 2 / M_PI, phase_error);
-		//fprintf(fid, "%f,%f,\n", freqerror, freqerror_trunc);
+		fprintf(fid, "%f,%f, %f, %f,\n", (nco_freq + nco_freq_fixed) * 1023e3 * osr_int / 2 / M_PI, phase_error, freqerror, freqerror_trunc);
+
 
 		fclose(fid);
 
@@ -427,8 +427,9 @@ namespace gr {
 				float freq_error = (arg(freq_corr_integrator_i) - arg(freq_corr_integrator_q_d) );
 				printf("freq_error (i): %f\n", freq_error);
 				update_pll(freq_error);
+				
 
-				freq_corr_integrator_i_d = freq_corr_integrator_q;
+				freq_corr_integrator_i_d = freq_corr_integrator_i;
 				freq_corr_integrator_i = 0;
 
 				// code tracking

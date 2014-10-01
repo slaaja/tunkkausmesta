@@ -4,14 +4,16 @@
   <key>gps_gps_codegen_c</key>
   <category>gps</category>
   <import>import gps</import>
-  <make>gps.gps_codegen_c($samplerate, $code)</make>
+  <make>gps.gps_codegen_c($samplerate, $code, $datamode)</make>
   <!-- Make one 'param' node for every Parameter you want settable from the GUI.
        Sub-nodes:
        * name
        * key (makes the value accessible as $keyname, e.g. in the make node)
        * type -->
 	<callback>set_code(int($code))</callback>
+	<callback>set_datamode(int($code))</callback>
 	<callback>set_sample_rate($samplerate)</callback>
+
 
   <param>
     <name>Sample rate</name>
@@ -24,6 +26,14 @@
     <key>code</key>
     <type>int</type>
   </param>
+
+  <param>
+    <name>Data generation mode</name>
+    <key>datamode</key>
+    <type>int</type>
+  </param>
+
+
   <!-- Make one 'sink' node per input. Sub-nodes:
        * name (an identifier for the GUI)
        * type

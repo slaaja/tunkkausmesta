@@ -31,16 +31,16 @@ namespace gr {
   namespace gps {
 
     gps_codegen_c::sptr
-    gps_codegen_c::make(float samplerate, int code)
+    gps_codegen_c::make(float samplerate, int code, int datamode)
     {
       return gnuradio::get_initial_sptr
-        (new gps_codegen_c_impl(samplerate, code));
+        (new gps_codegen_c_impl(samplerate, code, datamode));
     }
 
     /*
      * The private constructor
      */
-    gps_codegen_c_impl::gps_codegen_c_impl(float samplerate, int code)
+    gps_codegen_c_impl::gps_codegen_c_impl(float samplerate, int code, int datamode)
       : gr::sync_block("gps_codegen_c",
               gr::io_signature::make(0, 0, 0),
               gr::io_signature::make(1,1, sizeof(gr_complex)))
@@ -50,7 +50,11 @@ namespace gr {
 		set_sample_rate(samplerate);
 		code_phase = 0;
 
+		datagen_mode = datamode;
+		data_counter = 0;
 
+		for(int i = 0; i < 22 ; ++i)
+			random_data[i] = 1;
 	}
 
     /*
@@ -284,6 +288,34 @@ namespace gr {
 
 	}
 
+    void
+    gps_codegen_c_impl::set_datamode(int mode)
+    {
+		datagen_mode = mode;
+    }
+
+    void
+	gps_codegen_c_impl::advance_random_data()
+    {
+		// 22-bit m-sequence LFSR
+		char new_bit = ~(random_data[21] ^ random_data[20]);
+
+		for(int i = 21; i >= 0; --i)
+		{
+			if(i == 0)
+			{
+				random_data[i] = new_bit;
+			}
+			else
+			{
+				random_data[i] = random_data[i-1];
+			}
+
+		}
+
+		printf(":::: %d\n", (int)new_bit);
+    }
+
     int
     gps_codegen_c_impl::work(int noutput_items,
 			  gr_vector_const_void_star &input_items,
@@ -299,15 +331,31 @@ namespace gr {
 		{
 			code_sel = (int) ((code_phase + (1L << 39)) >> 40 );
 
-			
-			out[i] = code_LUT[code_sel];
+			if(datagen_mode == 1)
+				out[i] = ( (gr_complex)(((float)random_data[21] - 0.5f) * 2.0f) ) * code_LUT[code_sel];
+			else
+				out[i] = code_LUT[code_sel];
 
 			code_phase += code_phase_increment;
 
 			long limit = (1023L << 40);
 
 			if( code_phase >=  limit)
+			{
+				if(datagen_mode == 1)
+				{
+					if(data_counter == 20)
+					{
+						data_counter = 1;
+						advance_random_data();
+					}
+					else
+						data_counter++;
+				}
+
 				code_phase -= (1023L << 40);
+
+			}
 		}
 
         // Tell runtime system how many output items we produced.
