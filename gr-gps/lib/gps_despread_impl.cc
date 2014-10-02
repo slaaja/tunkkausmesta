@@ -139,6 +139,8 @@ namespace gr {
 		lf_int = 0;
 		lf_zero_d = 0;
 		lf_pole_d = 0;
+		freqerror_trunc_d = 0;
+
 		
 		nco_phase = 0;
     }
@@ -330,20 +332,26 @@ namespace gr {
 			freqerror_trunc += M_PI;
 
 		phase_error += freqerror_trunc;
+		
+		
+
+		freqerror_trunc_d = freqerror_trunc;
 
 		// two pole, one zero loop filter
 		float Kp = 0.905082;
 		float Kz = 0.990143;
 
 		lf_int = lf_int + (lf_pole_d - lf_zero_d + phase_error)/512.0f / 2000.0;
+		//lf_int = (lf_pole_d - lf_zero_d + phase_error)/512.0f / 2000.0; // type-I mode
 		lf_pole_d =  Kp * (lf_pole_d - lf_zero_d + phase_error);		 
 		lf_zero_d = Kz * phase_error;
+		//lf_zero_d = 0; // type-I mode		
 
 		nco_freq = lf_int;
 
 
 		FILE *fid = fopen("/home/samu/testi_out.txt", "a+");
-		fprintf(fid, "%f,\n", (nco_freq + nco_freq_fixed) * 1023e3 * osr_int / 2 / M_PI);
+		fprintf(fid, "%f,\n", phase_error);
 		fclose(fid);
 
 		printf("nco_freq: %f\n", (nco_freq + nco_freq_fixed) * 1023e3 * osr_int / 2 / M_PI);

@@ -75,6 +75,7 @@ namespace gr {
 		float lf_int;
 		float lf_zero_d;
 		float lf_pole_d;
+		float freqerror_trunc_d;
 
 		fsm_state fsm;
 
