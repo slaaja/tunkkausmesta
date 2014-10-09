@@ -23,6 +23,8 @@
 #endif
 
 #include <pthread.h>
+#include <string.h>
+
 
 #include <gnuradio/io_signature.h>
 #include <gnuradio/blocks/control_loop.h>
@@ -32,6 +34,8 @@
 #include "gps_despread_impl.h"
 
 #define DEBUG_OUT
+
+
 
 
 namespace gr {
@@ -82,150 +86,29 @@ namespace gr {
 	
 	}
 
-    gps_despread::sptr
-    gps_despread::make(int code_sel, int osr_in)
-    {
-      return gnuradio::get_initial_sptr
-        (new gps_despread_impl(code_sel, osr_in));
-    }
-
-    /*
-     * The private constructor
-     */
-    gps_despread_impl::gps_despread_impl(int code_sel, int osr_in)
-      : gr::block("gps_despread",
-              gr::io_signature::make(1, 1, sizeof(gr_complex)),
-              gr::io_signature::make(1, 1, sizeof(gr_complex)) )
-    {
-		// reset delay counter
-		delay_selection = 0;
-			
-		// fill the code lut
-		generate_codes();
-		set_code(code_sel);
-
-		code_counter = 0;
-		
-		osr_int = osr_in;
-
-		// reset search and tracking params
-		freq_search_Nsteps = 21;
-		int i;
-		
-		// state machine
-		fsm = state_search;
-
-		// code tracking		
-		for(i = 0; i < 5 ; ++i)
-			track_integrator[i] = 0;
-		track_counter = 0;
-		
-		// fft objects for search
-
-		fft_c = new gr::fft::fft_complex(1023 * osr_int, 1, 4);
-		ifft_c = new gr::fft::fft_complex(1023 * osr_int, 0, 4);		
-
-
-		// buffers for FFT fine frequency correction
-		freq_corr_integrator_i = 0;
-		freq_corr_integrator_q = 0;
-		freq_corr_integrator_i_d = 0;
-		freq_corr_integrator_q_d = 0;
-
-		search_avg_selection = 0;
-		
-		// frequency tracking loop
-		nco_freq = 0;
-		lf_int = 0;
-		lf_zero_d = 0;
-		lf_pole_d = 0;
-		freqerror_trunc_d = 0;
-
-		
-		nco_phase = 0;
-    }
-	
-	
-
-    /*
-     * Our virtual destructor.
-     */
-    gps_despread_impl::~gps_despread_impl()
-    {
-
-		delete ifft_c;
-		delete fft_c;
-    }
-	
-	
-	void gps_despread_impl::set_delay(int d)
+	void *search_worker(void *s)
 	{
 
-		if(d >= 0)
-			delay_selection = d % (1023 * osr_int);
-		else
-			delay_selection = osr_int * 1023 + (d % (1023 * osr_int));
-
-		printf("## Delay changed to %d\n", delay_selection);
-	}
-	
-	int gps_despread_impl::delay() const
-	{
-		
-		return delay_selection;
-	}
-	
-	int gps_despread_impl::osr() const
-	{
-		return osr_int;
-		
-	}
-	
-	void gps_despread_impl::set_osr(int o)
-	{
-		//this->osr_int = o;
-		
-	}
-	
-	void gps_despread_impl::set_freq(float f)
-	{
-		printf("## NCO frequency fixed part set to: %f\n", f);
-		nco_freq_fixed = 2 * M_PI * f / (1023e3 * osr_int);
-	}
-
-	int gps_despread_impl::code() const 
-	{
-		return code_selection;
-		
-	}
-
-	void gps_despread_impl::set_code(int c)
-	{
-		if(c < 32 && c > 0)
-		{
-			printf("## Code set to: %d\n", c);
-			code_selection = c;
-		}
-		else
-			printf("ERROR: Unknown code selection: %d\n", c);
-	}
-
-		
-
-
-	void gps_despread_impl::search(const gr_complex *in)
-	{
-		int best_delay = 0;
-		float best_power = -1;
-		float best_freq = 0;
-
-		int data_len = 1023 * osr_int;
 
 		int d = 0;
 		int f = 0;
 		int i;
 
+		search_data_t *search_data = (search_data_t *) s;
+
+		search_data->best_delay = 0;
+		search_data->best_power = -1;
+		search_data->best_freq = 0;	
+		search_data->running = 1;
+
+		int data_len = search_data->data_len;
+		int osr_int = search_data->osr;
+		int freq_search_Nsteps = search_data->freq_search_Nsteps;
+
 		printf("Searching...\n");
+
+		gr::fft::fft_complex *fft_c = new gr::fft::fft_complex(1023 * osr_int, 1, 4);
+		gr::fft::fft_complex *ifft_c = new gr::fft::fft_complex(1023 * osr_int, 0, 4);	
 
 		gr_complex *input_buffer = fft_c->get_inbuf();
 		gr_complex *output_buffer = fft_c->get_outbuf();
@@ -235,22 +118,25 @@ namespace gr {
 		//
 		gr_complex *code_fft_conj = new gr_complex[data_len];
 		gr_complex *input_data_fft = new gr_complex[data_len];
-			
+
 		for(i = 0; i < data_len; ++i)
 		{
-			input_buffer[i] = code_LUT[((int)(i/osr_int)) % 1023][code_selection - 1];
+
+			input_buffer[i] = search_data->code_LUT[((int)(i/osr_int)) % 1023];
 		}
 
 		fft_c->execute();
+
 			
 		for(i = 0; i < data_len; ++i)
 		{
 			code_fft_conj[i] = conj(output_buffer[i]);
-			input_buffer[i] = in[i];
+			input_buffer[i] = search_data->data[i];
 		}
 
 			
 		fft_c->execute();
+
 			
 		for(i = 0; i < data_len ; ++i)
 		{
@@ -277,36 +163,158 @@ namespace gr {
 			float avg;
 					
 			max_abs(output_buffer, data_len, peak, peak_offset, avg);
+
 					
-			//printf("i: %d, peak: %f , peak_offset: %d\n", i, peak, peak_offset);
-			if(peak > best_power)
+			printf("i: %d, peak: %f , peak_offset: %d\n", i, peak, peak_offset);
+			if(peak > search_data->best_power)
 			{				
-				best_power = peak;
-				best_freq = i * freq_step;
-				best_delay = peak_offset;
+				search_data->best_power = peak;
+				search_data->best_freq = i * freq_step;
+				search_data->best_delay = peak_offset;
 			}
 		}
 
 
-		float threshold = 0;
-		if( peak > threshold)
-		{
-			set_freq(best_freq);
-
-
-			set_delay(osr_int * 1023 - best_delay);
-			
-			// go to track mode
-			fsm = state_track;
-		}
-
-
-		printf("search:: consumed: %d\n", data_len);
-		consume_each(data_len);
+		printf("search:: best_freq: %f, best_delay: %d\n", search_data->best_freq, osr_int*1023-search_data->best_delay );
 		
+		delete fft_c;
+		delete ifft_c;		
+
 		delete code_fft_conj;
 		delete input_data_fft;
+		
+		search_data->done = 1;
+		search_data->running = 0;
 
+		pthread_exit(NULL);
+	}
+
+
+    gps_despread::sptr
+    gps_despread::make(int code_sel, int osr_in)
+    {
+      return gnuradio::get_initial_sptr
+        (new gps_despread_impl(code_sel, osr_in));
+    }
+
+    /*
+     * The private constructor
+     */
+    gps_despread_impl::gps_despread_impl(int code_sel, int osr_in)
+      : gr::block("gps_despread",
+              gr::io_signature::make(1, 1, sizeof(gr_complex)),
+              gr::io_signature::make(1, 1, sizeof(gr_complex)) )
+    {
+		// reset delay counter
+		delay_selection = 0;
+			
+		// fill the code lut
+		generate_codes();
+		set_code(code_sel);
+
+		code_counter = 0;
+		
+		osr_int = osr_in;
+
+		// search params
+		freq_search_Nsteps = 21;
+		int i;
+		search_data.running = 0;
+		search_data.done = 0;
+		search_acq_counter = 0;
+		
+		// state machine
+		fsm = state_start_search;
+
+		// code tracking		
+		for(i = 0; i < 5 ; ++i)
+			track_integrator[i] = 0;
+		track_counter = 0;
+		track_mode = 1;
+		lockdet_counter = 0;
+
+
+		// buffers for FFT fine frequency correction
+		for(i = 0; i < FREQ_SAMPLING_RATE; ++i)
+			freq_corr_integrator[i] = 0;
+		freq_corr_integrator_d = 0;
+		freq_Nsamples = FREQ_SAMPLING_RATE;
+
+
+		search_avg_selection = 0;
+		
+		// frequency tracking loop
+		nco_freq = 0;
+		lf_int = 0;
+		lf_zero_d = 0;
+		lf_pole_d = 0;
+		freqerror_trunc_d = 0;
+
+		
+		nco_phase = 0;
+    }
+	
+	
+
+    /*
+     * Our virtual destructor.
+     */
+    gps_despread_impl::~gps_despread_impl()
+    {
+
+    }
+	
+	
+	void gps_despread_impl::set_delay(int d)
+	{
+
+		if(d >= 0)
+			delay_selection = d % (1023 * osr_int);
+		else
+			delay_selection = osr_int * 1023 + (d % (1023 * osr_int));
+
+		//printf("## Delay changed to %d\n", delay_selection);
+	}
+	
+	int gps_despread_impl::delay() const
+	{
+		
+		return delay_selection;
+	}
+	
+	int gps_despread_impl::osr() const
+	{
+		return osr_int;
+		
+	}
+	
+	void gps_despread_impl::set_osr(int o)
+	{
+		//this->osr_int = o;
+		
+	}
+	
+	void gps_despread_impl::set_freq(float f)
+	{
+		//printf("## NCO frequency fixed part set to: %f\n", f);
+		nco_freq_fixed = 2 * M_PI * f / (1023e3 * osr_int);
+	}
+
+	int gps_despread_impl::code() const 
+	{
+		return code_selection;
+		
+	}
+
+	void gps_despread_impl::set_code(int c)
+	{
+		if(c < 32 && c > 0)
+		{
+			printf("## Code set to: %d\n", c);
+			code_selection = c;
+		}
+		else
+			printf("ERROR: Unknown code selection: %d\n", c);
 	}
 
 	void
@@ -321,6 +329,7 @@ namespace gr {
 		}
 	}
 
+
 	void
 	gps_despread_impl::update_pll(float freqerror)
 	{
@@ -333,28 +342,65 @@ namespace gr {
 
 		phase_error += freqerror_trunc;
 		
-		
+		float fix = 0;//freqerror_trunc_d + freqerror_trunc;
+
+		if(freqerror_trunc_d + freqerror_trunc > 3*M_PI/4)
+			fix = -M_PI;
+		if(freqerror_trunc_d + freqerror_trunc < -3*M_PI/4)
+			fix = M_PI;
+
+		phase_error += fix;
 
 		freqerror_trunc_d = freqerror_trunc;
 
 		// two pole, one zero loop filter
-		float Kp = 0.905082;
-		float Kz = 0.990143;
 
-		lf_int = lf_int + (lf_pole_d - lf_zero_d + phase_error)/512.0f / 2000.0;
+		// Fs = 2kHz (PhaM = 55deg)
+		//float Kp = 0.905082;
+		//float Kz = 0.990143;
+
+		// Fs = 4kHz (PhaM = 55deg)
+		float Kp = 0.95139;
+		float Kz = 0.99506;
+
+		lf_int = lf_int + (lf_pole_d - lf_zero_d + phase_error)/512.0f / 2000.0; // type-II mode
 		//lf_int = (lf_pole_d - lf_zero_d + phase_error)/512.0f / 2000.0; // type-I mode
 		lf_pole_d =  Kp * (lf_pole_d - lf_zero_d + phase_error);		 
-		lf_zero_d = Kz * phase_error;
+		lf_zero_d = Kz * phase_error; // type-II mode
 		//lf_zero_d = 0; // type-I mode		
 
 		nco_freq = lf_int;
 
-
 		FILE *fid = fopen("/home/samu/testi_out.txt", "a+");
-		fprintf(fid, "%f,\n", phase_error);
+		fprintf(fid, "%f,%f,\n", freqerror, fix);
 		fclose(fid);
 
-		printf("nco_freq: %f\n", (nco_freq + nco_freq_fixed) * 1023e3 * osr_int / 2 / M_PI);
+		// lock detection
+		if(lockdet_counter == 4999)
+		{
+			lockdet_counter = 0;
+			
+			if(abs(phase_error) > M_PI)
+			{
+				printf("# Frequency correction PLL unlocked.\n");
+				fsm = state_start_search;
+				track_mode = 1;
+			}
+			else
+			{
+				if(track_mode < 4)
+				{
+					track_mode = track_mode * 2;
+					printf("track_mode: %d\n", track_mode);
+				}
+			}
+		}
+		else
+		{
+			lockdet_counter++;
+		}
+
+		//printf("nco_freq: %f\n", (nco_freq + nco_freq_fixed) * 1023e3 * osr_int / 2 / M_PI);
 	}
 
 	void
@@ -395,18 +441,26 @@ namespace gr {
 			}
 		
 			// LO freq error correction
-			freq_corr_integrator_i += nco * in[i] * code_LUT[code_index][code_selection -1];
-			freq_corr_integrator_q += nco * in[i] * code_LUT[code_index][code_selection -1];
-			
-			if( (code_counter + delay_selection) == (osr_int * 1023 / 2 - 1) )
-			{	
-				float freq_error = (arg(freq_corr_integrator_q) - arg(freq_corr_integrator_i_d) );
+			for(int j = 0; j < freq_Nsamples; ++j)
+			{
+				int offset_index = (j + 1) * (osr_int * 1023)/freq_Nsamples - 1;
 				
-				update_pll(freq_error);
+				if( (code_counter + delay_selection) == offset_index) 
+				{
+					float freq_error = (arg(freq_corr_integrator[j]) - arg(freq_corr_integrator_d) );
+				
+					update_pll(freq_error);
 
-				freq_corr_integrator_q_d = freq_corr_integrator_q;
-				freq_corr_integrator_q = 0;
+					freq_corr_integrator_d = freq_corr_integrator[j];
+					freq_corr_integrator[j] = 0;
+				}
+				else
+				{
+					freq_corr_integrator[j] += nco * in[i] * code_LUT[code_index][code_selection - 1];
+				}
+	
 			}
+
 				
 			// code wrapped around -> sample ready
 			if( (code_counter + delay_selection) == (osr_int * 1023 - 1) )
@@ -415,17 +469,8 @@ namespace gr {
 
 				out[noutputs] = 0;
 
-
-				// freq tracking
-				float freq_error = (arg(freq_corr_integrator_i) - arg(freq_corr_integrator_q_d) );
-				update_pll(freq_error);
-				
-
-				freq_corr_integrator_i_d = freq_corr_integrator_i;
-				freq_corr_integrator_i = 0;
-
 				// code tracking
-				if(track_counter == 1)
+				if(track_counter == track_mode)
 				{
 					int best_ix;
 					float best_power;
@@ -476,7 +521,6 @@ namespace gr {
 			  gr_vector_const_void_star &input_items,
 			  gr_vector_void_star &output_items)
     {
-		unsigned long i = 0;
         const gr_complex *in = (const gr_complex *) input_items[0];
         gr_complex *out = (gr_complex *) output_items[0];
 
@@ -490,10 +534,120 @@ namespace gr {
 				track(in, out, noutput_items, noutputs);
 				break;
 		
-			case state_search:
+
+
+			case state_wait_search:
+				// keep the sample counter in sync while waiting for results.
+				// consume samples to 
+				for(int i = 0; i < noutput_items*1023*osr_int; ++i)
+				{
+					if(code_counter == (1023 * osr_int) - 1)
+					{
+						code_counter = 0;
+					}
+					else
+						code_counter++;
+
+					consume_each(1);
+				}			
+
+				if(search_data.done)
+				{
+					// free the data buffer
+					delete search_data.data;
+
+					float threshold = 0;
+					
+					if(abs(search_data.best_power) > threshold)	
+					{
+						// satellite found. start tracking
+
+						set_freq(search_data.best_freq);
+						set_delay(osr_int * 1023 - search_data.best_delay);
+						//set_delay(search_data.best_delay);
+
+
+						fsm = state_track;
+					}
+					else
+					{
+						// nothing found, retry search
+
+						fsm = state_start_search;
+					}
+					
+				}
+
+				break;
+					
+
+			case state_start_search:
 			default:
-				search(in);
-				break;			
+
+
+				// launch search 
+				if(!search_data.running)
+				{
+
+					if(search_acq_counter == 0)
+					{
+						// reset freq tracking PLL
+						lf_int = 0;
+						lf_pole_d = 0;
+						nco_freq = 0;
+						phase_error = 0;
+
+						for(int i = 0; i < FREQ_SAMPLING_RATE; ++i)
+							freq_corr_integrator[i] = 0;
+						freq_corr_integrator_d = 0;
+				
+
+						// reset code tracking integrators
+						for(int i = 0; i < 5 ; ++i)
+							track_integrator[i] = 0;
+						track_counter = 0;
+						track_mode = 1;
+						lockdet_counter = 0;
+
+						search_data.done = 0;
+	
+					
+						search_data.data = new gr_complex[1023 * osr_int];
+						for(int i = 0; i < 1023*osr_int ; ++i)
+							search_data.data[i] = in[i];
+
+					}
+					else
+					{
+						for(int i = 0; i < 1023*osr_int ; ++i)
+							search_data.data[i] += in[i];
+					}
+
+					if(++search_acq_counter == 20)
+					{
+
+						search_data.code_LUT = new gr_complex[1023];
+						for(int i = 0; i < 1023 ; ++i)
+							search_data.code_LUT[i] = code_LUT[i][code_selection - 1];
+
+						search_data.osr = osr_int;
+						search_data.data_len = 1023 * osr_int;
+				
+						search_data.freq_search_Nsteps = freq_search_Nsteps;
+
+						pthread_create(&search_thread, NULL, search_worker, (void *) &search_data);
+	
+						search_acq_counter = 0;
+						fsm = state_wait_search;
+					}
+
+				}
+				else
+				{
+					fsm = state_wait_search;
+				}
+
+				break;		
 		}
 		
         return noutputs;

@@ -24,14 +24,37 @@
 #define DEBUG_OUT
 #define MAX_SEARCH_THREADS 4
 
+
+#define FREQ_SAMPLING_RATE 4
+
 #include <gps/gps_despread.h>
 #include <gnuradio/fft/fft.h>
 
 typedef enum
 {
-	state_search,
+	state_start_search,
+	state_wait_search,
 	state_track
 } fsm_state;
+
+typedef struct 
+{
+	// inputs
+	gr_complex *data;
+	gr_complex *code_LUT;
+	int osr;
+	int data_len;
+	int freq_search_Nsteps;
+
+	// outputs
+	int best_delay;
+	float best_freq;
+	float best_power;
+
+	int done;
+	int running;
+	
+} search_data_t;
 
 namespace gr {
   namespace gps {
@@ -51,9 +74,11 @@ namespace gr {
 		int delay_selection;
 		 
 		 // search
-		gr::fft::fft_complex *fft_c;
-		gr::fft::fft_complex *ifft_c; 
 		int freq_search_Nsteps;
+
+		search_data_t search_data;
+		pthread_t search_thread;
+		int search_acq_counter;
 
 		int search_avg_selection;
 
@@ -65,12 +90,14 @@ namespace gr {
 		// code tracking
 		gr_complex track_integrator[5];
 		int track_counter;
+		int track_mode;
+		int lockdet_counter; // PLL lock detection
 
 		// freq tracking
-		gr_complex freq_corr_integrator_i;
-		gr_complex freq_corr_integrator_i_d;
-		gr_complex freq_corr_integrator_q;
-		gr_complex freq_corr_integrator_q_d;
+		gr_complex freq_corr_integrator[FREQ_SAMPLING_RATE];
+		gr_complex freq_corr_integrator_d; // sample of the last integration step		
+		int freq_Nsamples; // number of frequency samples per code period
+
 		float phase_error;
 		float lf_int;
 		float lf_zero_d;
@@ -81,7 +108,6 @@ namespace gr {
 
 		void generate_codes();
 
-		void search(const gr_complex *);
 		void track(const gr_complex *, gr_complex *, int, int &);
 		void update_pll(float);
 
@@ -101,10 +127,7 @@ namespace gr {
 		int delay(void) const;
 	  
 		void start_search();
-		
-		float (gps_despread_impl::*d_phase_detector)(gr_complex sample) const;
 	
-
 		void forecast(int, gr_vector_int &);
       // Where all the action really happens
 		int general_work(int, gr_vector_int &, gr_vector_const_void_star &, gr_vector_void_star &);

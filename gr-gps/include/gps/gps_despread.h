@@ -25,7 +25,6 @@
 #include <gps/api.h>
 #include <gnuradio/block.h>
 
-
 namespace gr {
   namespace gps {
 
